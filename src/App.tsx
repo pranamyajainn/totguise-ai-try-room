@@ -15,6 +15,8 @@ declare global {
   }
 }
 
+const logo = '/logo.avif';
+
 export default function App() {
   const [state, setState] = useState<AppState>('upload');
   const [userImages, setUserImages] = useState<string[]>([]);
@@ -23,6 +25,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [isKeySelecting, setIsKeySelecting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -47,6 +50,15 @@ export default function App() {
 
   const triggerUpload = () => {
     fileInputRef.current?.click();
+  };
+
+  const triggerCamera = () => {
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (isMobile) {
+      cameraInputRef.current?.click();
+    } else {
+      setState('capture3d');
+    }
   };
 
   const handleTryOn = async (product: Product) => {
@@ -138,14 +150,25 @@ export default function App() {
         }
       });
 
+      console.log("Gemini API Response:", response);
+
       let foundImage = false;
       const candidates = response.candidates;
+      
       if (candidates && candidates.length > 0) {
-        for (const part of candidates[0].content.parts) {
-          if (part.inlineData) {
-            setResultImage(`data:image/png;base64,${part.inlineData.data}`);
-            foundImage = true;
-            break;
+        const candidate = candidates[0];
+        
+        if (candidate.finishReason === 'SAFETY') {
+          throw new Error("The request was blocked by safety filters. Please try with a different photo.");
+        }
+        
+        if (candidate.content && candidate.content.parts) {
+          for (const part of candidate.content.parts) {
+            if (part.inlineData) {
+              setResultImage(`data:image/png;base64,${part.inlineData.data}`);
+              foundImage = true;
+              break;
+            }
           }
         }
       }
@@ -172,24 +195,23 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col bg-brand-cream">
       {/* Header */}
-      <header className="p-4 md:p-6 flex justify-between items-center max-w-7xl mx-auto w-full">
-        <div className="flex items-center gap-2">
-          <h1 className="text-xl md:text-2xl font-serif font-semibold text-brand-accent lowercase leading-none">totguise</h1>
-          <span className="text-[8px] md:text-[10px] uppercase tracking-[0.2em] opacity-50 font-medium mt-1">Studio</span>
+      <header className="p-4 md:p-8 flex justify-between items-center max-w-7xl mx-auto w-full">
+        <div className="flex items-center gap-3">
+          <img src={logo} alt="Totguise" className="h-9 md:h-[40px] w-auto object-contain" />
+          <span className="hidden md:block text-[10px] uppercase tracking-[0.3em] opacity-40 font-medium mt-2">Studio</span>
         </div>
         {state !== 'upload' && (
           <button 
             onClick={reset}
-            className="text-[10px] md:text-sm uppercase tracking-widest font-medium opacity-60 hover:opacity-100 transition-opacity flex items-center gap-1 md:gap-2 min-h-[44px] px-2"
+            className="text-[10px] md:text-xs uppercase tracking-widest font-medium opacity-60 hover:opacity-100 transition-opacity flex items-center justify-center md:gap-2 min-w-[48px] min-h-[48px] md:min-h-[44px] md:px-4"
           >
-            <RefreshCw size={14} />
-            <span className="hidden sm:inline">Start Over</span>
-            <span className="sm:hidden">Reset</span>
+            <RefreshCw size={20} className="md:w-3.5 md:h-3.5" />
+            <span className="hidden md:block">Start Over</span>
           </button>
         )}
       </header>
 
-      <main className="flex-1 max-w-7xl mx-auto w-full px-4 md:px-6 pb-12">
+      <main className="flex-1 max-w-7xl mx-auto w-full pb-20">
         <input 
           type="file" 
           ref={fileInputRef} 
@@ -198,104 +220,107 @@ export default function App() {
           multiple
           className="hidden" 
         />
+        <input 
+          type="file" 
+          ref={cameraInputRef} 
+          onChange={handleFileUpload} 
+          accept="image/*" 
+          capture="user"
+          className="hidden" 
+        />
         <AnimatePresence mode="wait">
           {state === 'upload' && (
             <motion.div
               key="upload"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="flex flex-col items-center justify-center min-h-[80vh] text-center py-12 md:py-20 px-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex flex-col items-center"
             >
-              <div className="max-w-5xl w-full">
-                <h2 className="text-5xl sm:text-7xl md:text-9xl mb-8 leading-[0.85] tracking-tighter font-serif">Try It On, Virtually</h2>
-                <p className="text-base sm:text-lg md:text-xl opacity-70 mb-12 md:mb-20 font-light max-w-2xl mx-auto leading-relaxed">
-                  Experience the future of tailoring. Provide multiple photos or use our advanced 3D capture for a perfect fit.
-                </p>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10 max-w-4xl mx-auto">
-                  <div 
+              {/* Hero Section */}
+              <section className="w-full mb-12 md:mb-24">
+                <div className="flex flex-col md:flex-row md:editorial-grid border-y border-brand-border">
+                  <div className="aspect-[4/5] md:aspect-[3/4] w-full overflow-hidden border-b md:border-b-0 md:border-r border-brand-border last:border-0">
+                    <img 
+                      src="https://totguise.com/cdn/shop/files/IMG_5634.jpg?v=1766595100&width=1500" 
+                      alt="Bloom Core Shacket" 
+                      className="w-full h-full object-cover grayscale-[0.2] hover:grayscale-0 transition-all duration-700"
+                    />
+                  </div>
+                  <div className="aspect-[4/5] md:aspect-[3/4] w-full overflow-hidden border-b md:border-b-0 md:border-r border-brand-border last:border-0">
+                    <img 
+                      src="https://totguise.com/cdn/shop/files/IMG_6058.jpg?v=1766596228&width=1500" 
+                      alt="Dance Town Shacket" 
+                      className="w-full h-full object-cover grayscale-[0.2] hover:grayscale-0 transition-all duration-700"
+                    />
+                  </div>
+                  <div className="aspect-[4/5] md:aspect-[3/4] w-full overflow-hidden border-b md:border-b-0 md:border-r border-brand-border last:border-0">
+                    <img 
+                      src="https://totguise.com/cdn/shop/files/IMG_5612.jpg?v=1766597033&width=1500" 
+                      alt="Carnival Stripe Shacket" 
+                      className="w-full h-full object-cover grayscale-[0.2] hover:grayscale-0 transition-all duration-700"
+                    />
+                  </div>
+                </div>
+                <div className="text-center mt-10 md:mt-12 px-6">
+                  <span className="text-[10px] md:text-xs uppercase tracking-[0.4em] font-bold opacity-30 mb-4 block">Upload Photos</span>
+                  <h2 className="text-[2rem] md:text-7xl italic mb-4 leading-tight">Try It On, Virtually</h2>
+                  <p className="text-sm md:text-xl font-light opacity-70 mb-4 px-6 md:px-0">See yourself in Totguise before you shop</p>
+                  <p className="text-brand-accent italic font-serif text-lg md:text-xl">Vacation Essentials, On You</p>
+                </div>
+              </section>
+
+              <div className="max-w-4xl w-full px-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                  <button 
                     onClick={triggerUpload}
-                    className="group relative cursor-pointer"
+                    className="flex flex-col items-center justify-center p-6 md:p-12 border border-brand-border hover:border-brand-ink/20 transition-all group bg-white min-h-[80px] md:min-h-0 md:aspect-auto md:h-auto"
                   >
-                    <div className="absolute -inset-3 bg-brand-ink/5 rounded-sm scale-95 group-hover:scale-100 transition-transform duration-700" />
-                    <div className="relative glass-panel p-10 md:p-12 flex flex-col items-center gap-8 border-dashed border-2 border-brand-ink/10 h-full min-h-[300px] justify-center">
-                      <div className="w-20 h-20 rounded-sm bg-brand-ink text-brand-cream flex items-center justify-center shadow-2xl group-hover:scale-110 transition-transform duration-700">
-                        <Upload size={36} />
-                      </div>
-                      <div className="text-center">
-                        <p className="font-bold text-xl mb-3">Upload Photos</p>
-                        <p className="text-sm opacity-60 leading-relaxed max-w-[240px] mx-auto">Select 3+ photos from different angles for best results</p>
-                      </div>
-                      
-                      <div className="w-full">
-                        <div className="bg-brand-ink text-brand-cream py-4 rounded-sm text-[10px] uppercase font-black tracking-[0.3em] flex items-center justify-center gap-3 group-hover:bg-brand-ink/90 transition-colors shadow-xl">
-                          Select Files <Upload size={16} />
-                        </div>
+                    <div className="hidden md:flex w-16 h-16 rounded-full border border-brand-border items-center justify-center mb-6 group-hover:bg-brand-ink group-hover:text-brand-cream transition-all">
+                      <Upload size={24} />
+                    </div>
+                    <div className="flex items-center gap-4 md:block">
+                      <Upload size={24} className="md:hidden opacity-60" />
+                      <div className="text-left md:text-center">
+                        <span className="text-sm md:text-base uppercase tracking-[0.2em] font-normal block">Upload Photos</span>
+                        <p className="md:hidden text-[10px] opacity-40 uppercase tracking-widest mt-0.5">Select from your library</p>
                       </div>
                     </div>
-                  </div>
+                    <p className="hidden md:block text-[10px] opacity-40 mt-2 uppercase tracking-widest">Select from your library</p>
+                  </button>
 
-                  <div 
-                    onClick={() => setState('capture3d')}
-                    className="group relative cursor-pointer"
+                  <button 
+                    onClick={triggerCamera}
+                    className="flex flex-col items-center justify-center p-6 md:p-12 border border-brand-border hover:border-brand-ink/20 transition-all group bg-white min-h-[80px] md:min-h-0 md:aspect-auto md:h-auto"
                   >
-                    <div className="absolute -inset-3 bg-brand-ink/5 rounded-sm scale-95 group-hover:scale-100 transition-transform duration-700" />
-                    <div className="relative glass-panel p-10 md:p-12 flex flex-col items-center gap-8 border-brand-ink/10 h-full bg-brand-ink text-brand-cream overflow-hidden min-h-[300px] justify-center">
-                      <div className="absolute top-0 right-0 p-5">
-                        <span className="bg-brand-cream text-brand-ink text-[10px] font-bold px-5 py-2 rounded-full uppercase tracking-widest shadow-2xl">Advanced AI</span>
-                      </div>
-                      <div className="w-20 h-20 rounded-sm bg-brand-cream text-brand-ink flex items-center justify-center shadow-2xl group-hover:scale-110 transition-transform duration-700">
-                        <Camera size={36} />
-                      </div>
-                      <div className="text-center">
-                        <p className="font-bold text-xl mb-3">3D Capture Mode</p>
-                        <p className="text-sm opacity-60 leading-relaxed max-w-[240px] mx-auto">Interactive 360° facial scanning for precision tailoring</p>
-                      </div>
-                      
-                      <div className="w-full">
-                        <div className="bg-brand-cream text-brand-ink py-4 rounded-sm text-[10px] uppercase font-black tracking-[0.3em] flex items-center justify-center gap-3 group-hover:bg-white transition-colors shadow-xl">
-                          Launch Scanner <Sparkles size={16} />
-                        </div>
-                      </div>
-
-                      <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-brand-cream/10 overflow-hidden">
-                        <motion.div 
-                          animate={{ x: ['-100%', '100%'] }}
-                          transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
-                          className="h-full w-1/3 bg-brand-cream/40"
-                        />
+                    <div className="hidden md:flex w-16 h-16 rounded-full border border-brand-border items-center justify-center mb-6 group-hover:bg-brand-ink group-hover:text-brand-cream transition-all">
+                      <Camera size={24} />
+                    </div>
+                    <div className="flex items-center gap-4 md:block">
+                      <Camera size={24} className="md:hidden opacity-60" />
+                      <div className="text-left md:text-center">
+                        <span className="text-sm md:text-base uppercase tracking-[0.2em] font-normal block">Take a Photo</span>
+                        <p className="md:hidden text-[10px] opacity-40 uppercase tracking-widest mt-0.5">Use your device camera</p>
                       </div>
                     </div>
-                  </div>
+                    <p className="hidden md:block text-[10px] opacity-40 mt-2 uppercase tracking-widest">Use your device camera</p>
+                  </button>
                 </div>
 
-                <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-4 text-left max-w-2xl mx-auto">
-                  <div className="glass-panel p-4">
-                    <p className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-2">Tip 01</p>
-                    <p className="text-xs leading-relaxed">Use natural, even lighting for the clearest facial details.</p>
+                <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8 text-center border-t border-brand-border pt-16">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-30 mb-4">Step 01</p>
+                    <p className="text-sm font-light leading-relaxed">Provide 1-3 clear photos of yourself in simple clothing.</p>
                   </div>
-                  <div className="glass-panel p-4">
-                    <p className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-2">Tip 02</p>
-                    <p className="text-xs leading-relaxed">Provide front, left, and right profile views for 3D accuracy.</p>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-30 mb-4">Step 02</p>
+                    <p className="text-sm font-light leading-relaxed">Select a Totguise piece from our latest collection.</p>
                   </div>
-                  <div className="glass-panel p-4">
-                    <p className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-2">Tip 03</p>
-                    <p className="text-xs leading-relaxed">Avoid busy backgrounds to help the AI focus on you.</p>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-30 mb-4">Step 03</p>
+                    <p className="text-sm font-light leading-relaxed">Our virtual atelier tailors the look to your photo instantly.</p>
                   </div>
                 </div>
-
-                {userImages.length > 0 && (
-                  <div className="mt-12">
-                    <p className="text-xs uppercase tracking-widest font-bold opacity-40 mb-4">Ready to proceed with {userImages.length} photos</p>
-                    <button 
-                      onClick={() => setState('select')}
-                      className="btn-primary px-8 py-3 flex items-center gap-2 mx-auto"
-                    >
-                      Continue to Selection <ArrowLeft className="rotate-180" size={18} />
-                    </button>
-                  </div>
-                )}
               </div>
             </motion.div>
           )}
@@ -316,51 +341,51 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="grid grid-cols-1 md:grid-cols-12 gap-8 md:gap-12"
+              className="grid grid-cols-1 md:grid-cols-12 gap-8 md:gap-12 pt-8"
             >
-              <div className="md:col-span-4 space-y-6 md:space-y-8">
+              <div className="md:col-span-4 space-y-8">
                 <div className="md:sticky md:top-8">
-                  <div className="flex items-center gap-4 mb-6">
+                  <div className="flex items-center gap-4 mb-6 md:mb-8">
                     <button 
                       onClick={() => setState('upload')} 
-                      className="p-3 hover:bg-brand-ink/5 rounded-full transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+                      className="p-2 hover:bg-brand-ink/5 rounded-full transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
                       aria-label="Go back"
                     >
                       <ArrowLeft size={20} />
                     </button>
-                    <h2 className="text-2xl md:text-3xl">Your Photos</h2>
+                    <h2 className="text-2xl md:text-4xl italic">Your Photos</h2>
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-2 mb-4 max-h-[300px] md:max-h-none overflow-y-auto pr-1">
+                  <div className="grid grid-cols-2 gap-2 mb-6 max-h-[400px] md:max-h-none overflow-y-auto pr-1">
                     {userImages.map((img, i) => (
-                      <div key={i} className={`aspect-[3/4] rounded-sm overflow-hidden bg-white shadow-lg relative ${i === 0 ? 'col-span-2' : ''}`}>
+                      <div key={i} className={`aspect-[3/4] rounded-sm overflow-hidden bg-white border border-brand-border relative ${i === 0 ? 'col-span-2' : ''}`}>
                         <img src={img} alt={`You ${i}`} className="w-full h-full object-cover" />
                         {i === 0 && (
-                          <div className="absolute top-2 right-2">
-                            <div className="bg-brand-ink text-brand-cream text-[8px] px-2 py-1 rounded-full uppercase tracking-widest font-bold">Primary</div>
+                          <div className="absolute top-3 right-3">
+                            <div className="bg-brand-ink text-brand-cream text-[8px] px-2 py-1 rounded-sm uppercase tracking-widest font-bold">Primary</div>
                           </div>
                         )}
                       </div>
                     ))}
                   </div>
 
-                  <div className="flex flex-col gap-2">
+                  <div className="flex flex-col gap-3">
                     <button 
                       onClick={() => triggerUpload()}
-                      className="btn-secondary w-full flex items-center justify-center gap-2 min-h-[48px] text-sm"
+                      className="btn-secondary w-full flex items-center justify-center gap-3"
                     >
-                      <Upload size={18} /> Add More Photos
+                      <Upload size={18} /> Add Photos
                     </button>
                     <button 
-                      onClick={() => setState('capture3d')}
-                      className="btn-secondary w-full flex items-center justify-center gap-2 min-h-[48px] text-sm bg-brand-ink text-brand-cream hover:bg-brand-ink/90"
+                      onClick={triggerCamera}
+                      className="btn-secondary w-full flex items-center justify-center gap-3"
                     >
-                      <RotateCw size={18} /> 3D Capture
+                      <Camera size={18} /> Take Photo
                     </button>
                   </div>
 
                   {error && (
-                    <div className="mt-4 p-4 bg-brand-error/10 text-brand-error rounded-sm text-sm font-medium">
+                    <div className="mt-6 p-4 border border-brand-accent/20 text-brand-accent rounded-sm text-sm font-light">
                       {error}
                     </div>
                   )}
@@ -368,41 +393,44 @@ export default function App() {
               </div>
 
               <div className="md:col-span-8">
-                <div className="mb-8">
-                  <h2 className="text-3xl md:text-4xl mb-2">Select a Piece</h2>
-                  <p className="text-sm md:text-base opacity-60">Choose a garment from our whimsical collection to try on.</p>
+                <div className="mb-8 md:mb-12 px-4 md:px-0">
+                  <h2 className="text-3xl md:text-5xl italic mb-3">Pick Your Happy Print</h2>
+                  <p className="text-sm md:text-lg font-light opacity-60">Choose a garment from our collection to try on.</p>
                 </div>
                 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 px-4 md:px-0">
                   {PRODUCTS.map((product) => (
                     <motion.div 
                       key={product.id}
-                      whileHover={{ y: -8 }}
-                      className="glass-panel overflow-hidden group cursor-pointer flex flex-col"
+                      whileHover={{ y: -4 }}
+                      className="bg-white border border-brand-border overflow-hidden group cursor-pointer flex flex-col md:block"
                       onClick={() => handleTryOn(product)}
                     >
-                      <div className="aspect-[4/5] overflow-hidden relative">
-                        <img 
-                          src={product.imageUrl} 
-                          alt={product.name} 
-                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                          referrerPolicy="no-referrer"
-                        />
-                        <div className="absolute inset-0 bg-brand-ink/0 group-hover:bg-brand-ink/10 transition-colors duration-500" />
-                        {/* Visible on mobile/tablet, hover on desktop */}
-                        <div className="absolute bottom-4 right-4 md:translate-y-4 md:opacity-0 md:group-hover:translate-y-0 md:group-hover:opacity-100 transition-all duration-300">
-                          <div className="bg-white text-brand-ink px-4 py-3 md:py-2 rounded-sm text-xs md:text-sm font-medium flex items-center gap-2 shadow-lg min-h-[44px]">
-                            Try it on <Sparkles size={14} />
+                      <div className="flex md:block">
+                        <div className="w-20 md:w-full aspect-square md:aspect-[4/5] overflow-hidden relative flex-shrink-0">
+                          <img 
+                            src={product.imageUrl} 
+                            alt={product.name} 
+                            className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
+                            referrerPolicy="no-referrer"
+                          />
+                        </div>
+                        <div className="p-4 md:p-8 flex-1 flex flex-col justify-center md:justify-between">
+                          <div className="flex justify-between items-baseline mb-1 md:mb-2 gap-4">
+                            <h3 className="text-base md:text-2xl italic leading-tight truncate">{product.name}</h3>
+                            <span className="text-xs md:text-base opacity-40">{product.price}</span>
                           </div>
+                          <p className="hidden md:block text-sm font-light opacity-60 line-clamp-2 leading-relaxed">{product.description}</p>
                         </div>
                       </div>
-                      <div className="p-4 md:p-6 flex-1 flex flex-col justify-between">
-                        <div>
-                          <div className="flex justify-between items-start mb-1 gap-2">
-                            <h3 className="text-lg md:text-xl leading-tight">{product.name}</h3>
-                            <span className="font-medium text-sm md:text-base whitespace-nowrap">{product.price}</span>
-                          </div>
-                          <p className="text-xs md:text-sm opacity-60 line-clamp-2">{product.description}</p>
+                      <div className="px-4 pb-4 md:hidden">
+                        <div className="bg-brand-ink text-brand-cream h-[52px] rounded-sm text-xs uppercase tracking-widest flex items-center justify-center gap-3 shadow-lg">
+                          Try it on <Sparkles size={14} />
+                        </div>
+                      </div>
+                      <div className="hidden md:block absolute bottom-6 right-6 translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-500">
+                        <div className="bg-brand-ink text-brand-cream px-6 py-3 rounded-sm text-xs uppercase tracking-widest flex items-center gap-3 shadow-2xl">
+                          Try it on <Sparkles size={14} />
                         </div>
                       </div>
                     </motion.div>
@@ -418,110 +446,105 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex flex-col items-center justify-center min-h-[60vh] md:h-[70vh] text-center py-12"
+              className="flex flex-col items-center justify-center min-h-[60vh] text-center py-20"
             >
-              <div className="relative mb-8 md:mb-12">
-                <motion.div 
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
-                  className="w-32 h-32 md:w-48 md:h-48 border-2 border-dashed border-brand-ink/20 rounded-full"
+              <div className="mb-12">
+                <motion.img
+                  src="/totguise-man.jpg"
+                  alt="Totguise"
+                  className="w-20 h-20 md:w-20 md:h-20 object-contain rounded-full shadow-xl"
+                  animate={{ scale: [1, 1.05, 1] }}
+                  transition={{ duration: 3, repeat: Infinity }}
                 />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <motion.div
-                    animate={{ scale: [1, 1.1, 1] }}
-                    transition={{ duration: 2, repeat: Infinity }}
-                    className="w-20 h-20 md:w-32 md:h-32 bg-brand-ink rounded-full flex items-center justify-center text-brand-cream shadow-2xl"
-                  >
-                    <Sparkles size={32} className="md:w-10 md:h-10" />
-                  </motion.div>
-                </div>
               </div>
-              <h2 className="text-2xl md:text-4xl mb-4 italic">Tailoring your look...</h2>
-              <p className="text-sm md:text-base opacity-60 max-w-xs md:max-w-md mx-auto px-4">
-                Our virtual atelier is tailoring the <span className="font-medium text-brand-ink">{selectedProduct?.name}</span> to your photo.
+              <h2 className="text-2xl md:text-6xl italic mb-3">Tailoring your look...</h2>
+              <p className="text-brand-accent italic font-serif text-xs md:text-xl mb-8">Prints Made for Happy Days</p>
+              <p className="text-sm md:text-xl font-light opacity-60 max-w-md mx-auto px-6">
+                Our virtual atelier is tailoring the <span className="font-normal text-brand-ink">{selectedProduct?.name}</span> to your photo.
               </p>
               
-                <div className="mt-8 md:mt-12 flex gap-3 md:gap-4">
-                  <div className="flex -space-x-4">
-                    {userImages.slice(0, 3).map((img, i) => (
-                      <div key={i} className="w-10 h-14 md:w-12 md:h-16 rounded-sm overflow-hidden border-2 border-brand-cream shadow-lg opacity-60 grayscale">
-                        <img src={img} alt="User" className="w-full h-full object-cover" />
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex items-center opacity-20">
-                    <div className="w-6 md:w-8 h-[1px] bg-brand-ink" />
-                  </div>
-                  <div className="w-10 h-14 md:w-12 md:h-16 rounded-sm overflow-hidden opacity-40 grayscale">
-                    <img src={selectedProduct?.imageUrl} alt="Product" className="w-full h-full object-cover" />
-                  </div>
+              <div className="mt-16 flex gap-6">
+                <div className="flex -space-x-6">
+                  {userImages.slice(0, 3).map((img, i) => (
+                    <div key={i} className="w-16 h-20 md:w-20 md:h-28 rounded-sm overflow-hidden border border-brand-cream shadow-2xl grayscale opacity-40">
+                      <img src={img} alt="User" className="w-full h-full object-cover" />
+                    </div>
+                  ))}
                 </div>
+                <div className="flex items-center opacity-10">
+                  <div className="w-12 md:w-20 h-[1px] bg-brand-ink" />
+                </div>
+                <div className="w-16 h-20 md:w-20 md:h-28 rounded-sm overflow-hidden border border-brand-cream shadow-2xl grayscale opacity-40">
+                  <img src={selectedProduct?.imageUrl} alt="Product" className="w-full h-full object-cover" />
+                </div>
+              </div>
             </motion.div>
           )}
 
           {state === 'result' && (
             <motion.div
               key="result"
-              initial={{ opacity: 0, scale: 0.95 }}
+              initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 1.05 }}
-              className="grid grid-cols-1 md:grid-cols-12 gap-8 md:gap-12 items-center"
+              exit={{ opacity: 0, scale: 1.02 }}
+              className="flex flex-col md:grid md:grid-cols-12 gap-10 md:gap-20 items-center pt-4 md:pt-8 px-4 md:px-0"
             >
-              <div className="md:col-span-7">
-                <div className="relative max-w-md md:max-w-none mx-auto">
-                  <div className="aspect-[3/4] rounded-sm overflow-hidden bg-white shadow-2xl border-4 md:border-8 border-white">
+              <div className="w-full md:col-span-7">
+                <div className="relative max-w-lg mx-auto">
+                  <div className="aspect-[3/4] rounded-sm overflow-hidden bg-white shadow-2xl border-8 md:border-[12px] border-white">
                     <img src={resultImage!} alt="Your Result" className="w-full h-full object-cover" />
                   </div>
                   <motion.div 
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.5 }}
-                    className="absolute -right-2 md:-right-6 top-1/4 glass-panel p-4 md:p-6 shadow-xl max-w-[140px] md:max-w-[200px]"
+                    transition={{ delay: 0.8 }}
+                    className="absolute -right-2 md:-right-12 top-1/4 bg-white border border-brand-border p-4 md:p-8 shadow-2xl max-w-[140px] md:max-w-[240px]"
                   >
-                    <div className="flex items-center gap-2 text-brand-success mb-2 font-bold text-[10px] md:text-xs uppercase tracking-wider">
-                      <Check size={14} /> Tailored
+                    <div className="flex items-center gap-2 md:gap-3 text-brand-accent mb-2 md:mb-4 font-normal text-[8px] md:text-xs uppercase tracking-widest">
+                      <Check size={12} className="md:w-4 md:h-4" /> Tailored
                     </div>
-                    <p className="text-xs md:text-sm italic">"The fit is effortless. A perfect match for your next wander."</p>
+                    <p className="text-xs md:text-base italic leading-relaxed">"The fit is effortless. A perfect match for your next wander."</p>
                   </motion.div>
                 </div>
               </div>
 
-              <div className="md:col-span-5 space-y-6 md:space-y-8 text-center md:text-left">
+              <div className="w-full md:col-span-5 space-y-8 md:space-y-10 text-center md:text-left">
                 <div>
-                  <span className="text-[10px] md:text-xs uppercase tracking-[0.3em] font-bold opacity-40 mb-3 md:mb-4 block">Virtual Fitting Result</span>
-                  <h2 className="text-4xl sm:text-5xl md:text-6xl mb-4 leading-tight">{selectedProduct?.name}</h2>
-                  <p className="text-base md:text-xl opacity-70 font-light leading-relaxed px-4 md:px-0">
+                  <span className="text-[10px] md:text-xs uppercase tracking-[0.4em] font-bold opacity-30 mb-4 block">Virtual Fitting Result</span>
+                  <p className="text-brand-accent italic font-serif text-lg md:text-xl mb-4 md:mb-6">Life's a vacation, dress like it</p>
+                  <h2 className="text-4xl sm:text-6xl md:text-7xl italic mb-4 md:mb-6 leading-tight">{selectedProduct?.name}</h2>
+                  <p className="text-base md:text-xl opacity-70 font-light leading-relaxed">
                     {selectedProduct?.description}
                   </p>
                 </div>
 
-                <div className="flex flex-col gap-3 md:gap-4 pt-4 px-4 md:px-0">
+                <div className="flex flex-col gap-3 md:gap-4 pt-4 md:pt-4">
                   <a 
                     href={selectedProduct?.url} 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="btn-primary flex items-center justify-center gap-3 text-base md:text-lg no-underline min-h-[56px] w-full"
+                    className="bg-brand-ink text-brand-cream min-h-[56px] md:h-auto md:btn-primary flex items-center justify-center gap-4 text-base md:text-lg no-underline rounded-sm uppercase tracking-[0.2em] font-normal px-8"
                   >
                     Shop This Look — {selectedProduct?.price} <ShoppingBag size={20} />
                   </a>
                   <button 
                     onClick={() => setState('select')}
-                    className="btn-secondary flex items-center justify-center gap-2 min-h-[56px] w-full"
+                    className="border border-brand-ink/10 min-h-[56px] md:h-auto md:btn-secondary flex items-center justify-center gap-3 rounded-sm text-sm uppercase tracking-[0.2em] font-normal px-8"
                   >
                     <RefreshCw size={18} /> Try another piece
                   </button>
                 </div>
 
-                <div className="pt-8 md:pt-12 border-t border-brand-ink/10">
-                  <div className="flex items-center justify-center md:justify-start gap-4">
-                    <div className="w-10 h-10 md:w-12 md:h-12 rounded-sm bg-brand-ink/5 flex items-center justify-center">
-                      <Camera size={20} className="opacity-40" />
+                <div className="pt-12 border-t border-brand-border">
+                  <div className="flex items-center justify-center md:justify-start gap-6">
+                    <div className="w-14 h-14 rounded-full border border-brand-border flex items-center justify-center">
+                      <Camera size={24} className="opacity-30" />
                     </div>
                     <div className="text-left">
-                      <p className="text-sm font-medium">Not quite right?</p>
+                      <p className="text-sm font-normal mb-1">Not quite right?</p>
                       <button 
                         onClick={() => setState('upload')} 
-                        className="text-[10px] md:text-xs uppercase tracking-widest font-bold opacity-40 hover:opacity-100 transition-opacity min-h-[32px]"
+                        className="text-[10px] md:text-xs uppercase tracking-[0.2em] font-bold opacity-40 hover:opacity-100 hover:text-brand-accent transition-all"
                       >
                         Change your photo
                       </button>
@@ -535,17 +558,17 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <footer className="p-8 md:p-12 text-center border-t border-brand-ink/5">
-        <p className="text-lg md:text-xl font-serif italic mb-6 md:mb-8">"Life's a vacation, dress like it"</p>
-        <div className="flex justify-center gap-6 mb-6 md:mb-8">
-          <a href="https://www.instagram.com/totguise/" target="_blank" rel="noopener noreferrer" className="opacity-40 hover:opacity-100 transition-opacity min-w-[44px] min-h-[44px] flex items-center justify-center">
+      <footer className="p-12 md:p-20 text-center border-t border-brand-border mt-12 md:mt-20 flex flex-col items-center">
+        <p className="text-xs md:text-2xl italic mb-8 md:mb-10 font-serif">Loved By Creators. Now Worn By You.</p>
+        <div className="flex justify-center gap-6 md:gap-8 mb-0">
+          <a href="https://www.instagram.com/totguise/" target="_blank" rel="noopener noreferrer" className="opacity-40 hover:opacity-100 hover:text-brand-accent transition-all min-w-[44px] min-h-[44px] flex items-center justify-center">
             <Instagram size={24} />
           </a>
-          <a href="https://www.facebook.com/totguise/" target="_blank" rel="noopener noreferrer" className="opacity-40 hover:opacity-100 transition-opacity min-w-[44px] min-h-[44px] flex items-center justify-center">
+          <a href="https://www.facebook.com/totguise/" target="_blank" rel="noopener noreferrer" className="opacity-40 hover:opacity-100 hover:text-brand-accent transition-all min-w-[44px] min-h-[44px] flex items-center justify-center">
             <Facebook size={24} />
           </a>
         </div>
-        <p className="opacity-30 text-[8px] md:text-[10px] uppercase tracking-[0.4em] px-4">
+        <p className="opacity-20 text-[10px] uppercase tracking-[0.5em] px-4">
           Totguise &copy; 2026 &bull; Virtual Atelier
         </p>
       </footer>
