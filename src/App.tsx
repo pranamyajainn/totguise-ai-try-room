@@ -1,29 +1,47 @@
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Upload, Camera, Sparkles, ArrowLeft, RefreshCw, Check, ShoppingBag, Instagram, Facebook } from 'lucide-react';
+import { Upload, Camera, Sparkles, ArrowLeft, RefreshCw, Check, ShoppingBag, Instagram, Facebook, RotateCw } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import { PRODUCTS } from './constants';
 import { Product, AppState } from './types';
+import { Capture3D } from './components/Capture3D';
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+declare global {
+  interface Window {
+    aistudio: {
+      hasSelectedApiKey: () => Promise<boolean>;
+      openSelectKey: () => Promise<void>;
+    };
+  }
+}
 
 export default function App() {
   const [state, setState] = useState<AppState>('upload');
-  const [userImage, setUserImage] = useState<string | null>(null);
+  const [userImages, setUserImages] = useState<string[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [resultImage, setResultImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isKeySelecting, setIsKeySelecting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setUserImage(e.target?.result as string);
-        setState('select');
-      };
-      reader.readAsDataURL(file);
+    const files = event.target.files;
+    if (files && files.length > 0) {
+      const newImages: string[] = [];
+      let processed = 0;
+      
+      Array.from(files).forEach((file: File) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          newImages.push(e.target?.result as string);
+          processed++;
+          if (processed === files.length) {
+            setUserImages(prev => [...prev, ...newImages].slice(0, 5)); // Limit to 5
+            setState('select');
+          }
+        };
+        reader.readAsDataURL(file);
+      });
     }
   };
 
@@ -32,20 +50,43 @@ export default function App() {
   };
 
   const handleTryOn = async (product: Product) => {
-    if (!userImage) return;
+    if (userImages.length === 0) return;
+
+    // Check for API key selection for high-quality model
+    try {
+      const hasKey = await window.aistudio.hasSelectedApiKey();
+      if (!hasKey) {
+        setIsKeySelecting(true);
+        await window.aistudio.openSelectKey();
+        setIsKeySelecting(false);
+      }
+    } catch (e) {
+      console.error("Key selection error:", e);
+    }
     
     setSelectedProduct(product);
     setState('generating');
     setError(null);
 
     try {
-      if (!process.env.GEMINI_API_KEY) {
-        throw new Error("Gemini API Key is missing. Please add GEMINI_API_KEY to your environment variables in Settings > Secrets.");
+      // Create a fresh instance to use the latest API key
+      const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        throw new Error("API Key is missing. Please select an API key or add GEMINI_API_KEY to your environment variables.");
       }
+      const ai = new GoogleGenAI({ apiKey });
 
-      // Convert user photo base64
-      const userPhotoBase64 = userImage.split(',')[1];
-      const userMimeType = userImage.split(';')[0].split(':')[1] || 'image/jpeg';
+      // Convert all user photos to base64
+      const userPhotoParts = userImages.map(img => {
+        const base64 = img.split(',')[1];
+        const mimeType = img.split(';')[0].split(':')[1] || 'image/jpeg';
+        return {
+          inlineData: {
+            data: base64,
+            mimeType: mimeType,
+          },
+        };
+      });
       
       // Fetch and convert product image to base64 via proxy
       let garmentBase64 = '';
@@ -65,15 +106,10 @@ export default function App() {
       }
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
+        model: 'gemini-3.1-flash-image-preview',
         contents: {
           parts: [
-            {
-              inlineData: {
-                data: userPhotoBase64,
-                mimeType: userMimeType,
-              },
-            },
+            ...userPhotoParts,
             {
               inlineData: {
                 data: garmentBase64,
@@ -81,15 +117,25 @@ export default function App() {
               },
             },
             {
-              text: `You are given two images. The first is a photo of a person. 
-              The second is a garment from the Totguise collection called "${product.name}". 
-              Generate a single high-quality image of the person wearing exactly that garment — 
-              preserving the garment's exact print, color, pattern, and cut as shown in the 
-              second image. Maintain the person's face, hair, skin tone, and body proportions. 
-              Keep a clean, warm, cream-toned background.`,
+              text: `You are an elite virtual fashion stylist and tailor. I am providing ${userImages.length} reference images of a person (SOURCE PHOTOS) from different angles and one TARGET GARMENT image.
+
+              TASK: Generate a photorealistic, high-fashion editorial image of the person from the SOURCE PHOTOS wearing the TARGET GARMENT.
+
+              STRICT CONSTRAINTS:
+              - FACIAL INTEGRITY: Use all provided SOURCE PHOTOS to reconstruct the person's face with 100% accuracy. The final face must be an IDENTICAL, PIXEL-PERFECT match to the person in the photos. Maintain every unique facial feature, expression, and detail from multiple angles.
+              - GARMENT PRECISION: The garment's print, pattern, color, and texture must be 100% IDENTICAL to the TARGET GARMENT image. Every detail of the "${product.name}" print must be perfectly preserved without any distortion, simplification, or alteration.
+              - FIT & POSE: The garment should fit the person naturally and realistically. The pose should be professional and showcase the garment's design clearly.
+              - STUDIO SETTING: Use a clean, minimal, warm cream-toned studio background with professional lighting.
+              - OUTPUT QUALITY: The final output must be high-resolution (2K), sharp, and indistinguishable from a real fashion photograph.`,
             },
           ],
         },
+        config: {
+          imageConfig: {
+            aspectRatio: "3:4",
+            imageSize: "2K"
+          }
+        }
       });
 
       let foundImage = false;
@@ -117,7 +163,7 @@ export default function App() {
   };
 
   const reset = () => {
-    setUserImage(null);
+    setUserImages([]);
     setSelectedProduct(null);
     setResultImage(null);
     setState('upload');
@@ -149,6 +195,7 @@ export default function App() {
           ref={fileInputRef} 
           onChange={handleFileUpload} 
           accept="image/*" 
+          multiple
           className="hidden" 
         />
         <AnimatePresence mode="wait">
@@ -158,29 +205,109 @@ export default function App() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="flex flex-col items-center justify-center min-h-[60vh] md:h-[70vh] text-center py-12"
+              className="flex flex-col items-center justify-center min-h-[80vh] text-center py-12 md:py-20 px-4"
             >
-              <div className="max-w-2xl">
-                <h2 className="text-4xl sm:text-5xl md:text-7xl mb-6 leading-[0.9] tracking-tight">Try It On, Virtually</h2>
-                <p className="text-base sm:text-lg md:text-xl opacity-70 mb-8 md:mb-12 font-light px-4">
-                  See yourself in Totguise before you shop. Upload a photo to begin your virtual fitting.
+              <div className="max-w-5xl w-full">
+                <h2 className="text-5xl sm:text-7xl md:text-9xl mb-8 leading-[0.85] tracking-tighter font-serif">Try It On, Virtually</h2>
+                <p className="text-base sm:text-lg md:text-xl opacity-70 mb-12 md:mb-20 font-light max-w-2xl mx-auto leading-relaxed">
+                  Experience the future of tailoring. Provide multiple photos or use our advanced 3D capture for a perfect fit.
                 </p>
                 
-                <div 
-                  onClick={triggerUpload}
-                  className="group relative cursor-pointer mx-auto max-w-md"
-                >
-                  <div className="absolute -inset-2 md:-inset-4 bg-brand-ink/5 rounded-sm scale-95 group-hover:scale-100 transition-transform duration-500" />
-                  <div className="relative glass-panel p-8 md:p-12 flex flex-col items-center gap-4 border-dashed border-2 border-brand-ink/10">
-                    <div className="w-12 h-12 md:w-16 md:h-16 rounded-sm bg-brand-ink text-brand-cream flex items-center justify-center mb-2">
-                      <Upload size={24} />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10 max-w-4xl mx-auto">
+                  <div 
+                    onClick={triggerUpload}
+                    className="group relative cursor-pointer"
+                  >
+                    <div className="absolute -inset-3 bg-brand-ink/5 rounded-sm scale-95 group-hover:scale-100 transition-transform duration-700" />
+                    <div className="relative glass-panel p-10 md:p-12 flex flex-col items-center gap-8 border-dashed border-2 border-brand-ink/10 h-full min-h-[300px] justify-center">
+                      <div className="w-20 h-20 rounded-sm bg-brand-ink text-brand-cream flex items-center justify-center shadow-2xl group-hover:scale-110 transition-transform duration-700">
+                        <Upload size={36} />
+                      </div>
+                      <div className="text-center">
+                        <p className="font-bold text-xl mb-3">Upload Photos</p>
+                        <p className="text-sm opacity-60 leading-relaxed max-w-[240px] mx-auto">Select 3+ photos from different angles for best results</p>
+                      </div>
+                      
+                      <div className="w-full">
+                        <div className="bg-brand-ink text-brand-cream py-4 rounded-sm text-[10px] uppercase font-black tracking-[0.3em] flex items-center justify-center gap-3 group-hover:bg-brand-ink/90 transition-colors shadow-xl">
+                          Select Files <Upload size={16} />
+                        </div>
+                      </div>
                     </div>
-                    <p className="font-medium text-sm md:text-base">Click to upload or drag and drop</p>
-                    <p className="text-xs md:text-sm opacity-50">PNG, JPG up to 10MB</p>
+                  </div>
+
+                  <div 
+                    onClick={() => setState('capture3d')}
+                    className="group relative cursor-pointer"
+                  >
+                    <div className="absolute -inset-3 bg-brand-ink/5 rounded-sm scale-95 group-hover:scale-100 transition-transform duration-700" />
+                    <div className="relative glass-panel p-10 md:p-12 flex flex-col items-center gap-8 border-brand-ink/10 h-full bg-brand-ink text-brand-cream overflow-hidden min-h-[300px] justify-center">
+                      <div className="absolute top-0 right-0 p-5">
+                        <span className="bg-brand-cream text-brand-ink text-[10px] font-bold px-5 py-2 rounded-full uppercase tracking-widest shadow-2xl">Advanced AI</span>
+                      </div>
+                      <div className="w-20 h-20 rounded-sm bg-brand-cream text-brand-ink flex items-center justify-center shadow-2xl group-hover:scale-110 transition-transform duration-700">
+                        <Camera size={36} />
+                      </div>
+                      <div className="text-center">
+                        <p className="font-bold text-xl mb-3">3D Capture Mode</p>
+                        <p className="text-sm opacity-60 leading-relaxed max-w-[240px] mx-auto">Interactive 360° facial scanning for precision tailoring</p>
+                      </div>
+                      
+                      <div className="w-full">
+                        <div className="bg-brand-cream text-brand-ink py-4 rounded-sm text-[10px] uppercase font-black tracking-[0.3em] flex items-center justify-center gap-3 group-hover:bg-white transition-colors shadow-xl">
+                          Launch Scanner <Sparkles size={16} />
+                        </div>
+                      </div>
+
+                      <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-brand-cream/10 overflow-hidden">
+                        <motion.div 
+                          animate={{ x: ['-100%', '100%'] }}
+                          transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
+                          className="h-full w-1/3 bg-brand-cream/40"
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
+
+                <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-4 text-left max-w-2xl mx-auto">
+                  <div className="glass-panel p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-2">Tip 01</p>
+                    <p className="text-xs leading-relaxed">Use natural, even lighting for the clearest facial details.</p>
+                  </div>
+                  <div className="glass-panel p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-2">Tip 02</p>
+                    <p className="text-xs leading-relaxed">Provide front, left, and right profile views for 3D accuracy.</p>
+                  </div>
+                  <div className="glass-panel p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-2">Tip 03</p>
+                    <p className="text-xs leading-relaxed">Avoid busy backgrounds to help the AI focus on you.</p>
+                  </div>
+                </div>
+
+                {userImages.length > 0 && (
+                  <div className="mt-12">
+                    <p className="text-xs uppercase tracking-widest font-bold opacity-40 mb-4">Ready to proceed with {userImages.length} photos</p>
+                    <button 
+                      onClick={() => setState('select')}
+                      className="btn-primary px-8 py-3 flex items-center gap-2 mx-auto"
+                    >
+                      Continue to Selection <ArrowLeft className="rotate-180" size={18} />
+                    </button>
+                  </div>
+                )}
               </div>
             </motion.div>
+          )}
+
+          {state === 'capture3d' && (
+            <Capture3D 
+              onComplete={(images) => {
+                setUserImages(prev => [...prev, ...images].slice(0, 10));
+                setState('select');
+              }}
+              onCancel={() => setState('upload')}
+            />
           )}
 
           {state === 'select' && (
@@ -201,28 +328,36 @@ export default function App() {
                     >
                       <ArrowLeft size={20} />
                     </button>
-                    <h2 className="text-2xl md:text-3xl">Your Photo</h2>
-                  </div>
-                  <div className="aspect-[3/4] rounded-sm overflow-hidden bg-white shadow-xl relative mb-4">
-                    <img src={userImage!} alt="You" className="w-full h-full object-cover" />
-                    <div className="absolute bottom-4 left-4 right-4">
-                      <div className="glass-panel px-4 py-2 flex items-center justify-center gap-2 text-[10px] md:text-xs font-medium uppercase tracking-wider">
-                        <Check size={14} className="text-brand-success" />
-                        Photo Ready
-                      </div>
-                    </div>
+                    <h2 className="text-2xl md:text-3xl">Your Photos</h2>
                   </div>
                   
-                  <button 
-                    onClick={() => {
-                      setUserImage(null);
-                      setState('upload');
-                      setTimeout(() => triggerUpload(), 0);
-                    }}
-                    className="btn-secondary w-full flex items-center justify-center gap-2 min-h-[48px] text-sm md:text-base"
-                  >
-                    <Camera size={18} /> Change Photo
-                  </button>
+                  <div className="grid grid-cols-2 gap-2 mb-4 max-h-[300px] md:max-h-none overflow-y-auto pr-1">
+                    {userImages.map((img, i) => (
+                      <div key={i} className={`aspect-[3/4] rounded-sm overflow-hidden bg-white shadow-lg relative ${i === 0 ? 'col-span-2' : ''}`}>
+                        <img src={img} alt={`You ${i}`} className="w-full h-full object-cover" />
+                        {i === 0 && (
+                          <div className="absolute top-2 right-2">
+                            <div className="bg-brand-ink text-brand-cream text-[8px] px-2 py-1 rounded-full uppercase tracking-widest font-bold">Primary</div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <button 
+                      onClick={() => triggerUpload()}
+                      className="btn-secondary w-full flex items-center justify-center gap-2 min-h-[48px] text-sm"
+                    >
+                      <Upload size={18} /> Add More Photos
+                    </button>
+                    <button 
+                      onClick={() => setState('capture3d')}
+                      className="btn-secondary w-full flex items-center justify-center gap-2 min-h-[48px] text-sm bg-brand-ink text-brand-cream hover:bg-brand-ink/90"
+                    >
+                      <RotateCw size={18} /> 3D Capture
+                    </button>
+                  </div>
 
                   {error && (
                     <div className="mt-4 p-4 bg-brand-error/10 text-brand-error rounded-sm text-sm font-medium">
@@ -306,17 +441,21 @@ export default function App() {
                 Our virtual atelier is tailoring the <span className="font-medium text-brand-ink">{selectedProduct?.name}</span> to your photo.
               </p>
               
-              <div className="mt-8 md:mt-12 flex gap-3 md:gap-4">
-                <div className="w-10 h-14 md:w-12 md:h-16 rounded-sm overflow-hidden opacity-40 grayscale">
-                  <img src={userImage!} alt="User" className="w-full h-full object-cover" />
+                <div className="mt-8 md:mt-12 flex gap-3 md:gap-4">
+                  <div className="flex -space-x-4">
+                    {userImages.slice(0, 3).map((img, i) => (
+                      <div key={i} className="w-10 h-14 md:w-12 md:h-16 rounded-sm overflow-hidden border-2 border-brand-cream shadow-lg opacity-60 grayscale">
+                        <img src={img} alt="User" className="w-full h-full object-cover" />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-center opacity-20">
+                    <div className="w-6 md:w-8 h-[1px] bg-brand-ink" />
+                  </div>
+                  <div className="w-10 h-14 md:w-12 md:h-16 rounded-sm overflow-hidden opacity-40 grayscale">
+                    <img src={selectedProduct?.imageUrl} alt="Product" className="w-full h-full object-cover" />
+                  </div>
                 </div>
-                <div className="flex items-center opacity-20">
-                  <div className="w-6 md:w-8 h-[1px] bg-brand-ink" />
-                </div>
-                <div className="w-10 h-14 md:w-12 md:h-16 rounded-sm overflow-hidden opacity-40 grayscale">
-                  <img src={selectedProduct?.imageUrl} alt="Product" className="w-full h-full object-cover" />
-                </div>
-              </div>
             </motion.div>
           )}
 

@@ -8,4 +8,4 @@ export interface Product {
   category: 'tops' | 'bottoms' | 'dresses' | 'sets';
 }
 
-export type AppState = 'upload' | 'select' | 'generating' | 'result';
+export type AppState = 'upload' | 'select' | 'generating' | 'result' | 'capture3d';
