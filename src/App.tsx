@@ -5,6 +5,7 @@ import { GoogleGenAI } from "@google/genai";
 import { PRODUCTS } from './constants';
 import { Product, AppState } from './types';
 import { Capture3D } from './components/Capture3D';
+import { LOGO_BASE64, MAN_BASE64 } from './assets';
 
 declare global {
   interface Window {
@@ -15,7 +16,12 @@ declare global {
   }
 }
 
-const logo = '/logo.avif';
+const logo = LOGO_BASE64;
+
+const getProxyUrl = (url: string | undefined) => {
+  if (!url) return '';
+  return `/api/proxy-image?url=${encodeURIComponent(url)}`;
+};
 
 export default function App() {
   const [state, setState] = useState<AppState>('upload');
@@ -196,9 +202,10 @@ export default function App() {
     <div className="min-h-screen flex flex-col bg-brand-cream">
       {/* Header */}
       <header className="p-4 md:p-8 flex justify-between items-center max-w-7xl mx-auto w-full">
-        <div className="flex items-center gap-3">
-          <img src={logo} alt="Totguise" className="h-9 md:h-[40px] w-auto object-contain" />
-          <span className="hidden md:block text-[10px] uppercase tracking-[0.3em] opacity-40 font-medium mt-2">Studio</span>
+        <div className="flex items-center gap-3 md:gap-5">
+          <img src={logo} alt="Totguise" className="h-8 md:h-[40px] w-auto object-contain" onError={(e) => e.currentTarget.style.display='none'} />
+          <div className="w-[1px] h-4 md:h-6 bg-brand-ink/20 rounded-full"></div>
+          <span className="text-[10px] md:text-xs uppercase tracking-[0.15em] md:tracking-[0.25em] text-brand-ink/70 font-semibold pt-0.5 md:pt-1">Virtual Try On Studio</span>
         </div>
         {state !== 'upload' && (
           <button 
@@ -242,23 +249,29 @@ export default function App() {
                 <div className="flex flex-col md:flex-row md:editorial-grid border-y border-brand-border">
                   <div className="aspect-[4/5] md:aspect-[3/4] w-full overflow-hidden border-b md:border-b-0 md:border-r border-brand-border last:border-0">
                     <img 
-                      src="https://totguise.com/cdn/shop/files/IMG_5634.jpg?v=1766595100&width=1500" 
+                      src={getProxyUrl("https://totguise.com/cdn/shop/files/IMG_5634.jpg?v=1766595100&width=1500")} 
                       alt="Bloom Core Shacket" 
                       className="w-full h-full object-cover grayscale-[0.2] hover:grayscale-0 transition-all duration-700"
+                      crossOrigin="anonymous"
+                      onError={(e) => e.currentTarget.style.display='none'}
                     />
                   </div>
                   <div className="aspect-[4/5] md:aspect-[3/4] w-full overflow-hidden border-b md:border-b-0 md:border-r border-brand-border last:border-0">
                     <img 
-                      src="https://totguise.com/cdn/shop/files/IMG_6058.jpg?v=1766596228&width=1500" 
+                      src={getProxyUrl("https://totguise.com/cdn/shop/files/IMG_6058.jpg?v=1766596228&width=1500")} 
                       alt="Dance Town Shacket" 
                       className="w-full h-full object-cover grayscale-[0.2] hover:grayscale-0 transition-all duration-700"
+                      crossOrigin="anonymous"
+                      onError={(e) => e.currentTarget.style.display='none'}
                     />
                   </div>
                   <div className="aspect-[4/5] md:aspect-[3/4] w-full overflow-hidden border-b md:border-b-0 md:border-r border-brand-border last:border-0">
                     <img 
-                      src="https://totguise.com/cdn/shop/files/IMG_5612.jpg?v=1766597033&width=1500" 
+                      src={getProxyUrl("https://totguise.com/cdn/shop/files/IMG_5612.jpg?v=1766597033&width=1500")} 
                       alt="Carnival Stripe Shacket" 
                       className="w-full h-full object-cover grayscale-[0.2] hover:grayscale-0 transition-all duration-700"
+                      crossOrigin="anonymous"
+                      onError={(e) => e.currentTarget.style.display='none'}
                     />
                   </div>
                 </div>
@@ -359,7 +372,7 @@ export default function App() {
                   <div className="grid grid-cols-2 gap-2 mb-6 max-h-[400px] md:max-h-none overflow-y-auto pr-1">
                     {userImages.map((img, i) => (
                       <div key={i} className={`aspect-[3/4] rounded-sm overflow-hidden bg-white border border-brand-border relative ${i === 0 ? 'col-span-2' : ''}`}>
-                        <img src={img} alt={`You ${i}`} className="w-full h-full object-cover" />
+                        <img src={img} alt={`You ${i}`} className="w-full h-full object-cover" onError={(e) => e.currentTarget.style.display='none'} />
                         {i === 0 && (
                           <div className="absolute top-3 right-3">
                             <div className="bg-brand-ink text-brand-cream text-[8px] px-2 py-1 rounded-sm uppercase tracking-widest font-bold">Primary</div>
@@ -409,10 +422,12 @@ export default function App() {
                       <div className="flex md:block">
                         <div className="w-20 md:w-full aspect-square md:aspect-[4/5] overflow-hidden relative flex-shrink-0">
                           <img 
-                            src={product.imageUrl} 
+                            src={getProxyUrl(product.imageUrl)} 
                             alt={product.name} 
                             className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
                             referrerPolicy="no-referrer"
+                            crossOrigin="anonymous"
+                            onError={(e) => e.currentTarget.style.display='none'}
                           />
                         </div>
                         <div className="p-4 md:p-8 flex-1 flex flex-col justify-center md:justify-between">
@@ -450,9 +465,10 @@ export default function App() {
             >
               <div className="mb-12">
                 <motion.img
-                  src="/totguise-man.jpg"
+                  src={MAN_BASE64}
                   alt="Totguise"
                   className="w-20 h-20 md:w-20 md:h-20 object-contain rounded-full shadow-xl"
+                  onError={(e) => e.currentTarget.style.display='none'}
                   animate={{ scale: [1, 1.05, 1] }}
                   transition={{ duration: 3, repeat: Infinity }}
                 />
@@ -467,7 +483,7 @@ export default function App() {
                 <div className="flex -space-x-6">
                   {userImages.slice(0, 3).map((img, i) => (
                     <div key={i} className="w-16 h-20 md:w-20 md:h-28 rounded-sm overflow-hidden border border-brand-cream shadow-2xl grayscale opacity-40">
-                      <img src={img} alt="User" className="w-full h-full object-cover" />
+                      <img src={img} alt="User" className="w-full h-full object-cover" onError={(e) => e.currentTarget.style.display='none'} />
                     </div>
                   ))}
                 </div>
@@ -475,7 +491,7 @@ export default function App() {
                   <div className="w-12 md:w-20 h-[1px] bg-brand-ink" />
                 </div>
                 <div className="w-16 h-20 md:w-20 md:h-28 rounded-sm overflow-hidden border border-brand-cream shadow-2xl grayscale opacity-40">
-                  <img src={selectedProduct?.imageUrl} alt="Product" className="w-full h-full object-cover" />
+                  <img src={getProxyUrl(selectedProduct?.imageUrl)} alt="Product" className="w-full h-full object-cover" crossOrigin="anonymous" onError={(e) => e.currentTarget.style.display='none'} />
                 </div>
               </div>
             </motion.div>
@@ -492,7 +508,7 @@ export default function App() {
               <div className="w-full md:col-span-7">
                 <div className="relative max-w-lg mx-auto">
                   <div className="aspect-[3/4] rounded-sm overflow-hidden bg-white shadow-2xl border-8 md:border-[12px] border-white">
-                    <img src={resultImage!} alt="Your Result" className="w-full h-full object-cover" />
+                    <img src={resultImage!} alt="Your Result" className="w-full h-full object-cover" onError={(e) => e.currentTarget.style.display='none'} />
                   </div>
                   <motion.div 
                     initial={{ opacity: 0, x: 20 }}
