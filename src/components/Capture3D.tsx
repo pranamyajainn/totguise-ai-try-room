@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Camera, Check, X, RotateCw, User, Sparkles } from 'lucide-react';
+import { Camera, Check, X, Sparkles } from 'lucide-react';
 
 interface Capture3DProps {
   onComplete: (images: string[]) => void;
@@ -13,14 +13,13 @@ export const Capture3D: React.FC<Capture3DProps> = ({ onComplete, onCancel }) =>
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [capturedImages, setCapturedImages] = useState<string[]>([]);
   const [step, setStep] = useState(0);
-  const [isCapturing, setIsCapturing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showFlash, setShowFlash] = useState(false);
 
   const steps = [
-    { label: 'Front View', description: 'Look straight into the camera' },
-    { label: 'Left Profile', description: 'Turn your head to the left' },
-    { label: 'Right Profile', description: 'Turn your head to the right' },
+    { label: 'Front', description: 'Face the camera straight on' },
+    { label: 'Left Side', description: 'Turn slightly left' },
+    { label: 'Right Side', description: 'Turn slightly right' },
   ];
 
   useEffect(() => {
@@ -56,21 +55,53 @@ export const Capture3D: React.FC<Capture3DProps> = ({ onComplete, onCancel }) =>
       
       const video = videoRef.current;
       const canvas = canvasRef.current;
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      
+      // Calculate 3:4 crop
+      const videoAspect = video.videoWidth / video.videoHeight;
+      const targetAspect = 3 / 4;
+      
+      let drawWidth = video.videoWidth;
+      let drawHeight = video.videoHeight;
+      let startX = 0;
+      let startY = 0;
+
+      if (videoAspect > targetAspect) {
+        // Video is wider than 3:4, crop sides
+        drawWidth = video.videoHeight * targetAspect;
+        startX = (video.videoWidth - drawWidth) / 2;
+      } else {
+        // Video is taller than 3:4, crop top/bottom
+        drawHeight = video.videoWidth / targetAspect;
+        startY = (video.videoHeight - drawHeight) / 2;
+      }
+
+      canvas.width = drawWidth;
+      canvas.height = drawHeight;
       const ctx = canvas.getContext('2d');
       if (ctx) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        // Mirror the drawing since video is mirrored
+        ctx.translate(drawWidth, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(video, startX, startY, drawWidth, drawHeight, 0, 0, drawWidth, drawHeight);
+        
         const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-        setCapturedImages(prev => [...prev, dataUrl]);
+        
+        const newImages = [...capturedImages];
+        newImages[step] = dataUrl;
+        setCapturedImages(newImages);
         
         if (step < steps.length - 1) {
           setStep(prev => prev + 1);
         } else {
-          setIsCapturing(false);
+          // All done, set step to 3 to show summary
+          setStep(3);
         }
       }
     }
+  };
+
+  const handleRetake = (index: number) => {
+    setStep(index);
   };
 
   const handleComplete = () => {
@@ -79,132 +110,124 @@ export const Capture3D: React.FC<Capture3DProps> = ({ onComplete, onCancel }) =>
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-brand-cream flex flex-col items-center justify-center p-0 md:p-8">
-      <div className="max-w-4xl w-full h-full flex flex-col gap-4 md:gap-8">
-        <div className="flex justify-between items-center text-brand-ink p-6 md:p-0">
-          <div>
-            <h2 className="text-2xl md:text-4xl italic">Take a Photo</h2>
-            <p className="text-xs md:text-sm font-light opacity-60">Follow the guide for a precise virtual fitting</p>
-          </div>
+    <div className="fixed inset-0 z-50 bg-brand-cream md:bg-black/80 flex flex-col items-center justify-center md:p-8">
+      <div className="max-w-[480px] w-full h-full md:h-auto md:max-h-[90vh] flex flex-col bg-white md:rounded-2xl md:shadow-2xl overflow-hidden relative">
+        
+        {/* Header */}
+        <div className="flex justify-between items-center p-4 border-b border-brand-border/50 bg-white z-20">
+          <h2 className="text-lg font-medium text-brand-ink">Take a Photo</h2>
           <button 
             onClick={onCancel}
-            className="p-3 hover:bg-brand-ink/5 rounded-full transition-colors min-w-[48px] min-h-[48px] flex items-center justify-center"
+            className="p-2 hover:bg-brand-ink/5 rounded-full transition-colors"
           >
-            <X size={24} />
+            <X size={20} />
           </button>
         </div>
 
-        <div className="flex-1 relative overflow-hidden bg-white shadow-2xl border-y md:border border-brand-border">
-          <video 
-            ref={videoRef} 
-            autoPlay 
-            playsInline 
-            muted 
-            className="w-full h-full object-cover mirror"
-          />
+        {/* Content Area */}
+        <div className="flex-1 flex flex-col bg-brand-cream overflow-y-auto">
+          
+          {step < 3 ? (
+            <>
+              {/* Camera Feed */}
+              <div className="relative w-full aspect-[3/4] bg-black overflow-hidden flex-shrink-0">
+                <video 
+                  ref={videoRef} 
+                  autoPlay 
+                  playsInline 
+                  muted 
+                  className="w-full h-full object-cover mirror"
+                />
 
-          <AnimatePresence>
-            {showFlash && (
-              <motion.div 
-                initial={{ opacity: 1 }}
-                animate={{ opacity: 0 }}
-                exit={{ opacity: 0 }}
-                className="absolute inset-0 bg-white z-10"
-              />
-            )}
-          </AnimatePresence>
+                <AnimatePresence>
+                  {showFlash && (
+                    <motion.div 
+                      initial={{ opacity: 1 }}
+                      animate={{ opacity: 0 }}
+                      exit={{ opacity: 0 }}
+                      className="absolute inset-0 bg-white z-10"
+                    />
+                  )}
+                </AnimatePresence>
 
-          {error && (
-            <div className="absolute inset-0 flex items-center justify-center bg-brand-cream/95 p-8 text-center">
-              <div className="max-w-sm">
-                <Camera size={48} className="text-brand-accent mx-auto mb-6 opacity-30" />
-                <p className="text-brand-ink text-lg mb-8 font-light">{error}</p>
+                {error && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/80 p-8 text-center z-20">
+                    <div className="max-w-sm">
+                      <Camera size={48} className="text-white/50 mx-auto mb-4" />
+                      <p className="text-white text-sm mb-6">{error}</p>
+                      <button 
+                        onClick={() => window.location.reload()}
+                        className="bg-white text-black px-6 py-2 rounded-full text-sm font-medium"
+                      >
+                        Try Again
+                      </button>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Progress Indicator */}
+                <div className="absolute top-4 left-0 right-0 flex justify-center z-20">
+                  <div className="bg-black/50 text-white px-4 py-1.5 rounded-full text-xs font-medium backdrop-blur-md">
+                    Step {step + 1}/3
+                  </div>
+                </div>
+
+                {/* Overlay Guide */}
+                <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center z-10">
+                  <div className="w-[55%] h-[75%] border-2 border-white/40 border-dashed rounded-[120px] relative" />
+                </div>
+              </div>
+
+              {/* Controls */}
+              <div className="flex-1 flex flex-col items-center justify-center p-6 bg-white">
+                <div className="text-center mb-6">
+                  <h3 className="text-lg font-medium text-brand-ink mb-1">{steps[step].label}</h3>
+                  <p className="text-sm text-brand-ink/60">{steps[step].description}</p>
+                </div>
+
                 <button 
-                  onClick={() => window.location.reload()}
-                  className="btn-primary px-10 py-4"
+                  onClick={captureFrame}
+                  className="w-16 h-16 rounded-full bg-white border-4 border-gray-200 flex items-center justify-center shadow-lg active:scale-95 transition-transform"
                 >
-                  Try Again
+                  <div className="w-12 h-12 rounded-full border border-gray-100 bg-brand-ink/5" />
+                </button>
+              </div>
+            </>
+          ) : (
+            /* Summary Screen */
+            <div className="flex-1 flex flex-col p-6 bg-white">
+              <div className="text-center mb-8 mt-4">
+                <h3 className="text-xl font-medium text-brand-ink mb-2">Review Photos</h3>
+                <p className="text-sm text-brand-ink/60">Make sure your face and body are clearly visible in all angles.</p>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3 mb-auto">
+                {capturedImages.map((img, i) => (
+                  <div key={i} className="flex flex-col items-center">
+                    <div className="w-full aspect-[3/4] rounded-md overflow-hidden border border-brand-border mb-2 relative group">
+                      <img src={img} alt={`Angle ${i}`} className="w-full h-full object-cover" />
+                    </div>
+                    <p className="text-xs font-medium text-brand-ink mb-1">{steps[i].label}</p>
+                    <button 
+                      onClick={() => handleRetake(i)}
+                      className="text-[10px] text-brand-ink/60 underline hover:text-brand-ink"
+                    >
+                      Retake
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-8">
+                <button
+                  onClick={handleComplete}
+                  className="w-full h-[52px] bg-brand-ink text-brand-cream font-medium rounded-sm flex items-center justify-center gap-2 hover:bg-brand-ink/90 transition-colors"
+                >
+                  <Check size={18} /> Use These Photos
                 </button>
               </div>
             </div>
           )}
-          
-          {/* Overlay Guide */}
-          <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center">
-            <div className="w-[60%] h-[60%] max-w-[320px] max-h-[400px] md:w-80 md:h-96 border border-brand-ink/20 rounded-[100px] relative">
-              <div className="absolute inset-0 border border-brand-ink/10 rounded-[100px] scale-110" />
-              
-              {/* Step Indicator */}
-              <div className="absolute -bottom-12 md:-bottom-16 left-1/2 -translate-x-1/2 w-max">
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={step}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    className="bg-brand-ink text-brand-cream px-8 py-3 rounded-sm text-xs uppercase tracking-widest shadow-2xl flex items-center gap-3"
-                  >
-                    <Sparkles size={14} />
-                    {steps[step].label}
-                  </motion.div>
-                </AnimatePresence>
-              </div>
-            </div>
-          </div>
-
-          {/* Progress Bar */}
-          <div className="absolute top-8 left-8 right-8 flex gap-3">
-            {steps.map((_, i) => (
-              <div 
-                key={i} 
-                className={`h-1 flex-1 transition-all duration-700 ${
-                  i < capturedImages.length ? 'bg-brand-ink' : 
-                  i === capturedImages.length ? 'bg-brand-ink/20' : 'bg-brand-ink/5'
-                }`} 
-              />
-            ))}
-          </div>
-
-          {/* Instruction */}
-          <div className="absolute bottom-24 left-8 right-8 text-center">
-            <p className="text-brand-ink text-xl md:text-2xl italic drop-shadow-sm">
-              {steps[step].description}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex justify-center gap-6 py-4">
-          {capturedImages.length < steps.length ? (
-            <div className="flex flex-col items-center gap-4">
-              <button 
-                onClick={captureFrame}
-                className="w-24 h-24 rounded-full border border-brand-border bg-white flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-all group"
-              >
-                <div className="w-20 h-20 rounded-full border border-brand-border flex items-center justify-center group-hover:bg-brand-ink group-hover:text-brand-cream transition-all">
-                  <Camera size={32} />
-                </div>
-              </button>
-              <p className="text-brand-ink text-[10px] uppercase font-bold tracking-[0.3em] opacity-40">Capture</p>
-            </div>
-          ) : (
-            <motion.button
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              className="btn-primary px-16 py-5 flex items-center gap-4 text-lg"
-              onClick={handleComplete}
-            >
-              <Check size={24} /> Complete Capture
-            </motion.button>
-          )}
-        </div>
-
-        {/* Captured Thumbnails */}
-        <div className="flex justify-center gap-3 pb-8 overflow-x-auto">
-          {capturedImages.map((img, i) => (
-            <div key={i} className="w-16 h-20 rounded-sm overflow-hidden border border-brand-border flex-shrink-0 grayscale opacity-40">
-              <img src={img} alt={`Capture ${i}`} className="w-full h-full object-cover" />
-            </div>
-          ))}
         </div>
       </div>
       <canvas ref={canvasRef} className="hidden" />

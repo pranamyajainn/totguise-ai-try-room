@@ -59,12 +59,7 @@ export default function App() {
   };
 
   const triggerCamera = () => {
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    if (isMobile) {
-      cameraInputRef.current?.click();
-    } else {
-      setState('capture3d');
-    }
+    setState('capture3d');
   };
 
   const handleTryOn = async (product: Product) => {
@@ -135,16 +130,7 @@ export default function App() {
               },
             },
             {
-              text: `You are an elite virtual fashion stylist and tailor. I am providing ${userImages.length} reference images of a person (SOURCE PHOTOS) from different angles and one TARGET GARMENT image.
-
-              TASK: Generate a photorealistic, high-fashion editorial image of the person from the SOURCE PHOTOS wearing the TARGET GARMENT.
-
-              STRICT CONSTRAINTS:
-              - FACIAL INTEGRITY: Use all provided SOURCE PHOTOS to reconstruct the person's face with 100% accuracy. The final face must be an IDENTICAL, PIXEL-PERFECT match to the person in the photos. Maintain every unique facial feature, expression, and detail from multiple angles.
-              - GARMENT PRECISION: The garment's print, pattern, color, and texture must be 100% IDENTICAL to the TARGET GARMENT image. Every detail of the "${product.name}" print must be perfectly preserved without any distortion, simplification, or alteration.
-              - FIT & POSE: The garment should fit the person naturally and realistically. The pose should be professional and showcase the garment's design clearly.
-              - STUDIO SETTING: Use a clean, minimal, warm cream-toned studio background with professional lighting.
-              - OUTPUT QUALITY: The final output must be high-resolution (2K), sharp, and indistinguishable from a real fashion photograph.`,
+              text: `You are given four images. The first three are photos of the same person from front, left, and right angles. The fourth is a garment. Generate a single high-quality image of this person wearing exactly that garment, using all three angle references to accurately reconstruct their appearance, skin tone, hair, and body proportions. Preserve the garment's exact print, color, and cut.`
             },
           ],
         },
@@ -341,7 +327,7 @@ export default function App() {
           {state === 'capture3d' && (
             <Capture3D 
               onComplete={(images) => {
-                setUserImages(prev => [...prev, ...images].slice(0, 10));
+                setUserImages(images);
                 setState('select');
               }}
               onCancel={() => setState('upload')}
