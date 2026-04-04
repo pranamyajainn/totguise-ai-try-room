@@ -6,6 +6,7 @@ export interface Product {
   imageUrl: string;
   url: string;
   category: 'tops' | 'bottoms' | 'dresses' | 'sets';
+  garment_description: string;
 }
 
-export type AppState = 'upload' | 'select' | 'generating' | 'result' | 'capture3d';
+export type AppState = 'upload' | 'select' | 'generating' | 'result';

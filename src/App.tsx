@@ -4,7 +4,6 @@ import { Upload, Camera, Sparkles, ArrowLeft, RefreshCw, Check, ShoppingBag, Ins
 import { GoogleGenAI } from "@google/genai";
 import { PRODUCTS } from './constants';
 import { Product, AppState } from './types';
-import { Capture3D } from './components/Capture3D';
 import { LOGO_BASE64, MAN_BASE64 } from './assets';
 
 declare global {
@@ -31,7 +30,6 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [isKeySelecting, setIsKeySelecting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -56,10 +54,6 @@ export default function App() {
 
   const triggerUpload = () => {
     fileInputRef.current?.click();
-  };
-
-  const triggerCamera = () => {
-    setState('capture3d');
   };
 
   const handleTryOn = async (product: Product) => {
@@ -130,7 +124,9 @@ export default function App() {
               },
             },
             {
-              text: `You are given four images. The first three are photos of the same person from front, left, and right angles. The fourth is a garment. Generate a single high-quality image of this person wearing exactly that garment, using all three angle references to accurately reconstruct their appearance, skin tone, hair, and body proportions. Preserve the garment's exact print, color, and cut.`
+              text: `You are given multiple images of a person and one garment image. Your primary directive is to preserve the garment EXACTLY as shown — every print detail, every color, every pattern repeat, every texture must be reproduced with pixel-level fidelity on the person. Do not simplify, interpret, or stylize the print. Do not alter colors. Do not change pattern scale. The garment in the output must be indistinguishable in print and color from the input garment image. Place this exact garment naturally on the person's body, preserving their face, skin tone, hair, and body proportions. Background should be clean, warm, cream-toned.
+
+The garment is specifically: ${product.garment_description}. Reproduce this exact print. Do not deviate.`
             },
           ],
         },
@@ -213,14 +209,6 @@ export default function App() {
           multiple
           className="hidden" 
         />
-        <input 
-          type="file" 
-          ref={cameraInputRef} 
-          onChange={handleFileUpload} 
-          accept="image/*" 
-          capture="user"
-          className="hidden" 
-        />
         <AnimatePresence mode="wait">
           {state === 'upload' && (
             <motion.div
@@ -270,10 +258,10 @@ export default function App() {
               </section>
 
               <div className="max-w-4xl w-full px-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                <div className="flex flex-col items-center justify-center">
                   <button 
                     onClick={triggerUpload}
-                    className="flex flex-col items-center justify-center p-6 md:p-12 border border-brand-border hover:border-brand-ink/20 transition-all group bg-white min-h-[80px] md:min-h-0 md:aspect-auto md:h-auto"
+                    className="w-full md:w-auto flex flex-col items-center justify-center p-6 md:p-12 md:px-24 border border-brand-border hover:border-brand-ink/20 transition-all group bg-white min-h-[80px] md:min-h-0"
                   >
                     <div className="hidden md:flex w-16 h-16 rounded-full border border-brand-border items-center justify-center mb-6 group-hover:bg-brand-ink group-hover:text-brand-cream transition-all">
                       <Upload size={24} />
@@ -281,29 +269,15 @@ export default function App() {
                     <div className="flex items-center gap-4 md:block">
                       <Upload size={24} className="md:hidden opacity-60" />
                       <div className="text-left md:text-center">
-                        <span className="text-sm md:text-base uppercase tracking-[0.2em] font-normal block">Upload Photos</span>
+                        <span className="text-sm md:text-base uppercase tracking-[0.2em] font-normal block">Upload Your Photo</span>
                         <p className="md:hidden text-[10px] opacity-40 uppercase tracking-widest mt-0.5">Select from your library</p>
                       </div>
                     </div>
                     <p className="hidden md:block text-[10px] opacity-40 mt-2 uppercase tracking-widest">Select from your library</p>
                   </button>
-
-                  <button 
-                    onClick={triggerCamera}
-                    className="flex flex-col items-center justify-center p-6 md:p-12 border border-brand-border hover:border-brand-ink/20 transition-all group bg-white min-h-[80px] md:min-h-0 md:aspect-auto md:h-auto"
-                  >
-                    <div className="hidden md:flex w-16 h-16 rounded-full border border-brand-border items-center justify-center mb-6 group-hover:bg-brand-ink group-hover:text-brand-cream transition-all">
-                      <Camera size={24} />
-                    </div>
-                    <div className="flex items-center gap-4 md:block">
-                      <Camera size={24} className="md:hidden opacity-60" />
-                      <div className="text-left md:text-center">
-                        <span className="text-sm md:text-base uppercase tracking-[0.2em] font-normal block">Take a Photo</span>
-                        <p className="md:hidden text-[10px] opacity-40 uppercase tracking-widest mt-0.5">Use your device camera</p>
-                      </div>
-                    </div>
-                    <p className="hidden md:block text-[10px] opacity-40 mt-2 uppercase tracking-widest">Use your device camera</p>
-                  </button>
+                  <p className="mt-6 text-center text-[#4A4540] italic font-serif text-sm md:text-base">
+                    "For best results: stand against a plain wall, good lighting, front facing, full body or waist up"
+                  </p>
                 </div>
 
                 <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8 text-center border-t border-brand-border pt-16">
@@ -322,16 +296,6 @@ export default function App() {
                 </div>
               </div>
             </motion.div>
-          )}
-
-          {state === 'capture3d' && (
-            <Capture3D 
-              onComplete={(images) => {
-                setUserImages(images);
-                setState('select');
-              }}
-              onCancel={() => setState('upload')}
-            />
           )}
 
           {state === 'select' && (
@@ -374,12 +338,6 @@ export default function App() {
                       className="btn-secondary w-full flex items-center justify-center gap-3"
                     >
                       <Upload size={18} /> Add Photos
-                    </button>
-                    <button 
-                      onClick={triggerCamera}
-                      className="btn-secondary w-full flex items-center justify-center gap-3"
-                    >
-                      <Camera size={18} /> Take Photo
                     </button>
                   </div>
 
